@@ -139,8 +139,10 @@ def images_processing():
         img_base = img = read_image(image_path)
 
         img = contrast(img)     
+        write_image("./results/high_contrast/high_contrast_" + image_name, img)
+        
         img = black_filter(img)
-        write_image("./results/pre_processed/pre_processed_" + image_name, img)
+        write_image("./results/black_filter/black_filter_" + image_name, img)
 
         img = band_pass_filter(img, image_name)
 
