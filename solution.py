@@ -3,7 +3,7 @@ import os
 import glob
 import matplotlib.pyplot as plt
 import cv2
-
+import imutils
 
 def read_image(img):
   img = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
@@ -17,7 +17,7 @@ def high_pass_filter(img):
   f = np.fft.fft2(img)
   fshift = np.fft.fftshift(f)
   
-  # Aplica filtro passa alta
+  # Aplica filtro passa faixa
   rows, cols = img.shape
   
   mask = np.zeros((rows, cols), np.uint8)
@@ -40,30 +40,13 @@ def segmentation(img):
 
   img = img.astype("uint8")
   # Aplica uma equalização de histograma para melhorar o contraste da imagem
-  img = cv2.equalizeHist(img)
+  # img = cv2.equalizeHist(img)
 
   # Aplica um filtro gaussiano para suavizar a imagem
   img = cv2.GaussianBlur(img, (37, 37), 0)
-  ret, thresholded = cv2.threshold(img, 35, 255, cv2.THRESH_BINARY)
+  _, thresholded = cv2.threshold(img, 35, 255, cv2.THRESH_BINARY)
 
   return thresholded
-
-def find_contours(img):
-  # Aplica uma equalização de histograma para melhorar o contraste da imagem
-  gray = cv2.equalizeHist(img)
-
-  # Aplica um filtro gaussiano para suavizar a imagem
-  gray = cv2.GaussianBlur(gray, (5, 5), 0)
-
-  # Aplica o algoritmo de detecção de bordas Canny
-  edges = cv2.Canny(gray, 100, 200)
-
-  # Encontra os contornos na imagem de bordas
-  contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-  # Desenha os contornos na imagem original
-  cv2.drawContours(img, contours, -1, (0, 0, 255), 2)
-
 
 def black_filter(img):
     mask = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)[1]
@@ -77,9 +60,9 @@ def show(img):
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     plt.show()
 
-ALPHA_OFFSET = 1.40
-
 def contrast(img):
+    ALPHA_OFFSET = 1.40
+
     # Calcula os valores mínimo e máximo dos pixels
     min_val, max_val, _, _ = cv2.minMaxLoc(img)
 
@@ -102,17 +85,59 @@ def convert_images():
         cv2.imwrite("./dataset/jpeg/" + image + ".jpeg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
 
+def polygon_contours(img_proc, img_base):
+
+    PERIMETER_PRECISION = 0.04
+    MIN_AREA = 200
+    VERTICES = 4
+    # Encontra os contornos na imagem
+    contours, hierarchy = cv2.findContours(img_proc, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    selected_contours = []
+
+    height, width = img_proc.shape[:2]
+    # Verifica se cada contorno é uma curva fechada
+    for contour in contours:
+
+        if cv2.contourArea(contour) < MIN_AREA:
+            continue
+        # Obtém o retângulo delimitador do contorno
+        x, y, w, h = cv2.boundingRect(contour)
+        
+        # Verifica se o retângulo delimitador não coincide com as bordas da imagem
+        if x > 0 and y > 0 and x + w < width and y + h < height:
+            # Calcula o comprimento do contorno
+            perimeter = cv2.arcLength(contour, True)
+            
+            # Aproxima o contorno por um polígono
+            approx = cv2.approxPolyDP(contour, PERIMETER_PRECISION*perimeter, True)
+            
+            # Verifica se o polígono tem um número de vértices próximo de 4
+            if len(approx) > VERTICES:
+                selected_contours.append(contour)
+
+    selected_contours = sorted(selected_contours, key=lambda c: cv2.contourArea(c), reverse=True) 
+    
+    if len(selected_contours) > 0:
+        img_base = cv2.cvtColor(img_base, cv2.COLOR_GRAY2RGB)
+        cv2.drawContours(img_base, [selected_contours[0]], -1, (127, 0, 255), 3)
+
+    return img_base
+
 def images_processing():
     images_path = glob.glob("./dataset/jpeg/*.jpeg")
 
     for image_path in images_path:
+
         image_name = image_path.split('/')[-1]
-        img = read_image(image_path)
+        img_base = img = read_image(image_path)
         img = contrast(img)     # aumenta o contraste da imagem
         img = black_filter(img) # aplica um filtro pra tirar os pixels pretos
-        img_hp_filter = high_pass_filter(img)
-        img_seg = segmentation(img_hp_filter)
-        cv2.imwrite("./results/segmented/segmented_" + image_name, img_seg, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        img = high_pass_filter(img)
+        img = segmentation(img)
+        cv2.imwrite("./results/segmented/segmented_" + image_name, img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        img = polygon_contours(img, img_base)
+        cv2.imwrite("./results/with_contours/contours" + image_name, img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])        
+        
 
 if '__main__' == __name__:
     images_processing()
