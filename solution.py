@@ -3,7 +3,6 @@ import os
 import glob
 import matplotlib.pyplot as plt
 import cv2
-import imutils
 
 def read_image(img):
   img = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
@@ -139,8 +138,8 @@ def images_processing():
         image_name = image_path.split('/')[-1]
         img_base = img = read_image(image_path)
 
-        img = contrast(img)     # aumenta o contraste da imagem
-        img = black_filter(img) # aplica um filtro pra tirar os pixels pretos
+        img = contrast(img)     
+        img = black_filter(img)
         write_image("./results/pre_processed/pre_processed_" + image_name, img)
 
         img = band_pass_filter(img, image_name)
@@ -158,7 +157,7 @@ def write_text(text, img):
     org = (5, img.shape[0] - 5)
     font = cv2.FONT_HERSHEY_SIMPLEX
     fontScale = .8
-    color = (127, 0, 255) # Verde em BGR
+    color = (127, 0, 255)
     thickness = 1
     lineType = cv2.LINE_AA
     cv2.putText(img, text, org, font, fontScale, color, thickness, lineType)

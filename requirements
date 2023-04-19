@@ -2,4 +2,3 @@ numpy
 matplotlib
 scikit-image
 opencv-python
-imutils
