@@ -11,39 +11,44 @@ def read_image(img):
 
   return img
   
-def high_pass_filter(img):
+def band_pass_filter(img, image_name):
 
-  # Aplica a transformada rápida de Fourier na imagem e centraliza baixa frequência
-  f = np.fft.fft2(img)
-  fshift = np.fft.fftshift(f)
-  
-  # Aplica filtro passa faixa
-  rows, cols = img.shape
-  
-  mask = np.zeros((rows, cols), np.uint8)
-  r1, r2 = 10, 220
-  c1, c2 = 10, 220
-  mask[r1:r2, c1:c2] = 1
+    # Aplica a transformada rápida de Fourier na imagem e centraliza baixa frequência
+    f = np.fft.fft2(img)
+    fshift = np.fft.fftshift(f)
 
-  # Aplicar a máscara na imagem transformada
-  fshift = fshift * mask
+    fshift_norm = cv2.normalize(np.abs(fshift), None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+    write_image("./results/fft/fft_" + image_name, fshift_norm)
+    
+    # Aplica filtro passa faixa
+    rows, cols = img.shape
+    
+    mask = np.zeros((rows, cols), np.uint8)
+    r1, r2 = 10, 220
+    c1, c2 = 10, 220
+    mask[r1:r2, c1:c2] = 1
 
-  # Aplicação da transformada inversa para pegar o retorno da imagem
-  f_ishift = np.fft.ifftshift(fshift)
-  img_inverted = np.fft.ifft2(f_ishift)
-  img_inverted = np.real(img_inverted)
+    # Aplicar a máscara na imagem transformada
+    fshift = fshift * mask
+    fshift_norm = cv2.normalize(np.abs(fshift), None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+    write_image("./results/band_pass_filter/band_pass_filter_" + image_name, fshift_norm)
 
-  return img_inverted
+    # Aplicação da transformada inversa para pegar o retorno da imagem
+    f_ishift = np.fft.ifftshift(fshift)
+    img_inverted = np.fft.ifft2(f_ishift)
+    img_inverted = np.real(img_inverted)
+    write_image("./results/ifft/ifft_" + image_name, img_inverted)
+
+    return img_inverted
 
 def segmentation(img):
   # Aplica o método de Otsu para separar a região da mama do fundo
-
   img = img.astype("uint8")
-  # Aplica uma equalização de histograma para melhorar o contraste da imagem
-  # img = cv2.equalizeHist(img)
 
   # Aplica um filtro gaussiano para suavizar a imagem
   img = cv2.GaussianBlur(img, (37, 37), 0)
+
+  # Aplica o limiar
   _, thresholded = cv2.threshold(img, 35, 255, cv2.THRESH_BINARY)
 
   return thresholded
@@ -90,6 +95,7 @@ def polygon_contours(img_proc, img_base):
     PERIMETER_PRECISION = 0.04
     MIN_AREA = 200
     VERTICES = 4
+
     # Encontra os contornos na imagem
     contours, hierarchy = cv2.findContours(img_proc, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     selected_contours = []
@@ -120,6 +126,9 @@ def polygon_contours(img_proc, img_base):
     if len(selected_contours) > 0:
         img_base = cv2.cvtColor(img_base, cv2.COLOR_GRAY2RGB)
         cv2.drawContours(img_base, [selected_contours[0]], -1, (127, 0, 255), 3)
+        write_text("With Nodule", img_base)
+    else:
+        write_text("No Nodule", img_base)
 
     return img_base
 
@@ -127,17 +136,33 @@ def images_processing():
     images_path = glob.glob("./dataset/jpeg/*.jpeg")
 
     for image_path in images_path:
-
         image_name = image_path.split('/')[-1]
         img_base = img = read_image(image_path)
+
         img = contrast(img)     # aumenta o contraste da imagem
         img = black_filter(img) # aplica um filtro pra tirar os pixels pretos
-        img = high_pass_filter(img)
+        write_image("./results/pre_processed/pre_processed_" + image_name, img)
+
+        img = band_pass_filter(img, image_name)
+
         img = segmentation(img)
-        cv2.imwrite("./results/segmented/segmented_" + image_name, img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        write_image("./results/segmented/segmented_" + image_name, img)
+
         img = polygon_contours(img, img_base)
-        cv2.imwrite("./results/with_contours/contours" + image_name, img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])        
+        write_image("./results/with_contours/contours_" + image_name, img)
         
+def write_image(path, image):
+    cv2.imwrite(path, image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+
+def write_text(text, img):
+    org = (5, img.shape[0] - 5)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fontScale = .8
+    color = (127, 0, 255) # Verde em BGR
+    thickness = 1
+    lineType = cv2.LINE_AA
+    cv2.putText(img, text, org, font, fontScale, color, thickness, lineType)
+    return img
 
 if '__main__' == __name__:
     images_processing()
